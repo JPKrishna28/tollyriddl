@@ -1,0 +1,217 @@
+"""Game endpoints.
+
+Every route treats the client as untrusted. Dates, movie ids, attempt
+counts and lifeline availability are all re-derived server-side; nothing
+the browser sends is taken at face value.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.config import settings
+from app.database import get_db
+from app.models import DailyGame, GameSession, GameStatus
+from app.schemas import GuessRequest, LifelineRequest, StartGameRequest
+from app.services import daily_movie as daily_movie_service
+from app.services import game_service
+from app.services.game_service import GameError
+
+router = APIRouter(prefix="/games", tags=["games"])
+
+
+def _handle(error: GameError) -> HTTPException:
+    return HTTPException(
+        status_code=error.status, detail={"detail": error.message, "code": error.code}
+    )
+
+
+def _resolve_today(client_date: date | None) -> date:
+    """Decide what 'today' means.
+
+    The player's local date is honoured so the puzzle rolls over at their
+    local midnight, but it is clamped to +/-1 day around UTC. Without the
+    clamp, setting the system clock forward would unlock future puzzles.
+    """
+    server_today = datetime.now(timezone.utc).date()
+    if client_date is None:
+        return server_today
+    delta = (client_date - server_today).days
+    if -1 <= delta <= 1:
+        return client_date
+    return server_today
+
+
+@router.get("/today")
+def today(
+    client_date: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Metadata for today's puzzle.
+
+    Announces that a puzzle exists and its rules -- never which movie it is.
+    """
+    game_date = _resolve_today(client_date)
+    daily = daily_movie_service.get_or_create_daily_game(db, game_date)
+    if daily is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"detail": "No eligible movies available.", "code": "no_eligible_movies"},
+        )
+
+    return {
+        "game_date": game_date.isoformat(),
+        "available": True,
+        "base_attempts": settings.base_attempts,
+        "bonus_attempts": settings.bonus_attempts,
+        "lifeline_1_after": settings.lifeline_1_after,
+        "lifeline_2_after": settings.lifeline_2_after,
+    }
+
+
+@router.post("/start")
+def start(
+    payload: StartGameRequest | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Begin a session for a date's puzzle."""
+    payload = payload or StartGameRequest()
+    today_date = _resolve_today(payload.client_date)
+    game_date = payload.game_date or today_date
+
+    try:
+        game = game_service.start_session(db, game_date, today_date)
+    except GameError as error:
+        raise _handle(error) from error
+
+    return game_service.serialize_game(db, game)
+
+
+@router.get("/archive")
+def archive(
+    client_date: date | None = Query(default=None),
+    limit: int = Query(default=settings.archive_max_days, ge=1, le=365),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Playable past dates, newest first.
+
+    Lists only which dates exist and how sessions there ended. It never
+    includes the mystery movie for a date the player has not finished.
+    """
+    today_date = _resolve_today(client_date)
+    dates = daily_movie_service.archive_dates(today_date, limit=limit)
+
+    rows = db.execute(
+        select(DailyGame).where(DailyGame.game_date.in_(dates))
+    ).scalars()
+    daily_by_date = {row.game_date: row for row in rows}
+
+    entries: list[dict] = []
+    for game_date in dates:
+        daily = daily_by_date.get(game_date)
+        status = "not_played"
+
+        if daily is not None:
+            sessions = db.execute(
+                select(GameSession).where(GameSession.daily_game_id == daily.id)
+            ).scalars()
+            statuses = {
+                (s.status.value if isinstance(s.status, GameStatus) else s.status)
+                for s in sessions
+            }
+            if GameStatus.WON.value in statuses:
+                status = "won"
+            elif GameStatus.LOST.value in statuses:
+                status = "lost"
+            elif GameStatus.ACTIVE.value in statuses:
+                status = "in_progress"
+
+        entries.append(
+            {
+                "game_date": game_date.isoformat(),
+                "is_today": game_date == today_date,
+                "status": status,
+            }
+        )
+
+    return {"today": today_date.isoformat(), "entries": entries}
+
+
+@router.get("/archive/{game_date}")
+def archive_date(
+    game_date: date,
+    client_date: date | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Confirm a past date is playable, without revealing its answer."""
+    today_date = _resolve_today(client_date)
+    if game_date > today_date:
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": "Game not available yet.", "code": "future_date"},
+        )
+
+    daily = daily_movie_service.get_or_create_daily_game(db, game_date)
+    if daily is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"detail": "No eligible movies available.", "code": "no_eligible_movies"},
+        )
+
+    return {"game_date": game_date.isoformat(), "available": True}
+
+
+@router.get("/{game_id}")
+def get_game(game_id: str, db: Session = Depends(get_db)) -> dict:
+    """Current state of a session, for resuming after a refresh."""
+    try:
+        game = game_service.get_session(db, game_id)
+    except GameError as error:
+        raise _handle(error) from error
+    return game_service.serialize_game(db, game)
+
+
+@router.post("/{game_id}/guess")
+def guess(game_id: str, payload: GuessRequest, db: Session = Depends(get_db)) -> dict:
+    """Submit a guess and receive only the shared attributes."""
+    try:
+        outcome = game_service.submit_guess(db, game_id, payload.guess_movie_id)
+    except GameError as error:
+        raise _handle(error) from error
+
+    return {
+        "attempt": outcome.attempt_number,
+        "result": outcome.result,
+        "game": game_service.serialize_game(db, outcome.session, include_history=False),
+    }
+
+
+@router.post("/{game_id}/lifeline")
+def lifeline(
+    game_id: str, payload: LifelineRequest, db: Session = Depends(get_db)
+) -> dict:
+    """Spend a lifeline to reveal one attribute."""
+    try:
+        revealed = game_service.use_lifeline(db, game_id, payload.attribute)
+        game = game_service.get_session(db, game_id)
+    except GameError as error:
+        raise _handle(error) from error
+
+    return {
+        "revealed": revealed,
+        "game": game_service.serialize_game(db, game, include_history=False),
+    }
+
+
+@router.post("/{game_id}/unlock-bonus")
+def unlock_bonus(game_id: str, db: Session = Depends(get_db)) -> dict:
+    """Unlock three additional attempts after the base seven."""
+    try:
+        game = game_service.unlock_bonus(db, game_id)
+    except GameError as error:
+        raise _handle(error) from error
+    return game_service.serialize_game(db, game)
