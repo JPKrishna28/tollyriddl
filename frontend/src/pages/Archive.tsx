@@ -9,7 +9,7 @@ import type { ArchiveEntry } from '@/types/game';
 
 const STATUS_STYLES: Record<ArchiveEntry['status'], string> = {
   won: 'chip-match',
-  lost: 'chip-miss',
+  lost: 'chip-lost',
   in_progress: 'chip-gold',
   not_played: 'chip-miss',
 };
@@ -65,15 +65,15 @@ export function Archive() {
 
   if (error) {
     return (
-      <div className="card p-6 text-center text-sm text-slate-300">{error}</div>
+      <div className="card p-6 text-center text-sm text-slate-600">{error}</div>
     );
   }
 
   return (
     <div className="space-y-4">
       <header>
-        <h1 className="font-display text-xl font-bold text-slate-100">Past games</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="font-display text-xl font-bold text-slate-900">Past games</h1>
+        <p className="mt-1 text-sm text-slate-600">
           Replay any previous day’s mystery movie.
         </p>
       </header>
@@ -84,10 +84,10 @@ export function Archive() {
             <Link
               to={entry.is_today ? '/' : `/game/${entry.game_date}`}
               className="card flex items-center justify-between gap-3 px-4 py-3.5
-                         transition-colors hover:bg-white/5"
+                         transition-colors hover:bg-slate-50"
             >
               <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-medium text-slate-100">
+                <span className="truncate text-sm font-medium text-slate-900">
                   {formatDate(entry.game_date)}
                 </span>
                 {entry.is_today && <span className="chip chip-gold">Today</span>}

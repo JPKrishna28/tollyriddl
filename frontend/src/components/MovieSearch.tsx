@@ -104,9 +104,9 @@ export function MovieSearch({ onSelect, disabled, guessedIds, placeholder }: Pro
           onFocus={() => results.length > 0 && setOpen(true)}
           onKeyDown={onKeyDown}
           placeholder={placeholder ?? 'Search a Telugu movie…'}
-          className="w-full rounded-xl border border-white/10 bg-ink-850/80 py-3.5 pl-11 pr-4
-                     text-base text-slate-100 placeholder:text-slate-500
-                     focus:border-gold-500/50 focus:outline-none focus:ring-2 focus:ring-gold-500/20
+          className="w-full rounded-xl border border-slate-300 bg-white py-3.5 pl-11 pr-4
+                     text-base text-slate-900 placeholder:text-slate-400
+                     focus:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200
                      disabled:opacity-50"
           role="combobox"
           aria-expanded={open}
@@ -125,7 +125,7 @@ export function MovieSearch({ onSelect, disabled, guessedIds, placeholder }: Pro
           id="movie-search-results"
           role="listbox"
           className="absolute z-30 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border
-                     border-white/10 bg-ink-850 shadow-2xl shadow-black/50"
+                     border-slate-200 bg-white shadow-lg divide-y divide-slate-100"
         >
           {results.length === 0 && !loading && (
             <li className="px-4 py-3 text-sm text-slate-500">
@@ -143,10 +143,10 @@ export function MovieSearch({ onSelect, disabled, guessedIds, placeholder }: Pro
                   onClick={() => choose(movie)}
                   className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left
                               text-sm transition-colors
-                              ${index === highlighted ? 'bg-white/5' : ''}
-                              ${already ? 'cursor-not-allowed opacity-40' : 'hover:bg-white/5'}`}
+                              ${index === highlighted ? 'bg-slate-50' : ''}
+                              ${already ? 'cursor-not-allowed opacity-40' : 'hover:bg-slate-50'}`}
                 >
-                  <span className="truncate font-medium text-slate-100">{movie.title}</span>
+                  <span className="truncate font-medium text-slate-900">{movie.title}</span>
                   <span className="shrink-0 text-xs text-slate-500">
                     {already ? 'already guessed' : movie.year ?? ''}
                   </span>

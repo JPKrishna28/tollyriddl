@@ -10,7 +10,7 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
       end
       className={({ isActive }) =>
         `rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-          isActive ? 'bg-white/10 text-slate-100' : 'text-slate-400 hover:text-slate-200'
+          isActive ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:text-slate-900'
         }`
       }
     >
@@ -28,7 +28,7 @@ export default function App() {
             <span className="text-xl" aria-hidden>
               🎬
             </span>
-            <span className="font-display text-lg font-bold tracking-tight text-slate-50">
+            <span className="font-display text-lg font-bold tracking-tight text-slate-900">
               Telugu Riddle
             </span>
           </Link>
@@ -37,7 +37,7 @@ export default function App() {
             <NavItem to="/archive">Past games</NavItem>
           </nav>
         </div>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-slate-600">
           Guess the mystery Telugu movie in 7 attempts.
         </p>
       </header>
@@ -51,7 +51,7 @@ export default function App() {
             path="*"
             element={
               <div className="card p-8 text-center">
-                <p className="text-slate-300">Page not found.</p>
+                <p className="text-slate-600">Page not found.</p>
                 <Link to="/" className="btn-primary mt-4">
                   Back to today’s puzzle
                 </Link>
@@ -61,7 +61,7 @@ export default function App() {
         </Routes>
       </main>
 
-      <footer className="mt-10 border-t border-white/5 pt-4 text-center text-xs text-slate-600">
+      <footer className="mt-10 border-t border-slate-200 pt-4 text-center text-xs text-slate-500">
         Movie data from Wikipedia (CC BY-SA 4.0) · 2000–2023
       </footer>
     </div>

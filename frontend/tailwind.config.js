@@ -4,28 +4,27 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Dark cinematic base with a warm gold accent -- film-marquee
-        // colouring rather than a dashboard palette.
-        ink: {
-          950: '#080a12',
-          900: '#0d1020',
-          850: '#12162a',
-          800: '#171c33',
-          700: '#222842',
-          600: '#2f3757',
-        },
-        gold: {
-          400: '#f5c451',
-          500: '#e6a92c',
-          600: '#c98d16',
+        // White surface, muted ink accents. Green/red are desaturated so a
+        // correct/incorrect verdict reads clearly without glowing.
+        accent: {
+          50: '#f8fafc',
+          200: '#e2e8f0',
+          500: '#475569',
+          700: '#334155',
         },
         match: {
-          400: '#34d399',
-          500: '#10b981',
-          600: '#059669',
+          50: '#f0f7f2',
+          200: '#c9e2d2',
+          500: '#4e8f68',
+          600: '#3f7455',
+          700: '#336046',
         },
         miss: {
-          500: '#64748b',
+          50: '#fdf3f3',
+          200: '#f0cfcf',
+          500: '#b4544f',
+          600: '#9a4541',
+          700: '#7d3835',
         },
       },
       fontFamily: {

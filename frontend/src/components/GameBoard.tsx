@@ -1,8 +1,8 @@
 // The main game screen.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { GuessRow } from '@/components/GuessRow';
+import { GuessFeedback } from '@/components/GuessFeedback';
 import { LifelinePanel } from '@/components/LifelinePanel';
 import { MovieSearch } from '@/components/MovieSearch';
 import { ResultModal } from '@/components/ResultModal';
@@ -20,7 +20,7 @@ function AttemptPips({ used, max }: { used: number; max: number }) {
         <span
           key={index}
           className={`h-1.5 w-5 rounded-full transition-colors ${
-            index < used ? 'bg-gold-500' : 'bg-white/10'
+            index < used ? 'bg-slate-800' : 'bg-slate-200'
           }`}
         />
       ))}
@@ -45,6 +45,10 @@ export function GameBoard({ gameDate, heading }: Props) {
 
   const [showResult, setShowResult] = useState(false);
 
+  // Newest first. Memoised so the reversed copy is not rebuilt on every
+  // keystroke in the search box.
+  const latestFirst = useMemo(() => [...guesses].reverse(), [guesses]);
+
   // Pop the result modal automatically when the game ends.
   useEffect(() => {
     if (game && game.status !== 'active' && game.mystery_movie) {
@@ -66,7 +70,7 @@ export function GameBoard({ gameDate, heading }: Props) {
   if (!game) {
     return (
       <div className="card p-6 text-center">
-        <p className="text-slate-300">{error ?? 'Could not load the game.'}</p>
+        <p className="text-slate-600">{error ?? 'Could not load the game.'}</p>
         <button type="button" className="btn-primary mt-4" onClick={() => void reload()}>
           Try again
         </button>
@@ -85,14 +89,14 @@ export function GameBoard({ gameDate, heading }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="label">{heading ?? 'Today’s mystery movie'}</p>
-            <p className="mt-1 font-display text-lg font-semibold text-slate-100">
+            <p className="mt-1 font-display text-lg font-semibold text-slate-900">
               Guess the Telugu movie
             </p>
           </div>
           <div className="text-right">
-            <p className="font-display text-xl font-bold text-gold-400">
+            <p className="font-display text-xl font-bold text-slate-900">
               {game.attempts_used}
-              <span className="text-slate-500"> / {game.max_attempts}</span>
+              <span className="text-slate-400"> / {game.max_attempts}</span>
             </p>
             <p className="text-[0.7rem] uppercase tracking-wider text-slate-500">attempts</p>
           </div>
@@ -116,11 +120,11 @@ export function GameBoard({ gameDate, heading }: Props) {
 
       {/* Bonus unlock prompt */}
       {game.bonus_available && (
-        <section className="card animate-fade-up border-gold-500/20 p-5 text-center">
-          <p className="font-display text-base font-semibold text-slate-100">
+        <section className="card animate-fade-up p-5 text-center">
+          <p className="font-display text-base font-semibold text-slate-900">
             Out of guesses — unlock 3 more?
           </p>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-slate-600">
             You have used all {game.base_attempts} attempts. Take {game.bonus_attempts}{' '}
             more to crack it.
           </p>
@@ -137,14 +141,14 @@ export function GameBoard({ gameDate, heading }: Props) {
       {error && (
         <div
           role="alert"
-          className="flex items-start justify-between gap-3 rounded-xl border border-red-500/25
-                     bg-red-500/10 px-4 py-3 text-sm text-red-200"
+          className="flex items-start justify-between gap-3 rounded-xl border border-miss-200
+                     bg-miss-50 px-4 py-3 text-sm text-miss-700"
         >
           <span>{error}</span>
           <button
             type="button"
             onClick={dismissError}
-            className="shrink-0 text-red-300/70 hover:text-red-200"
+            className="shrink-0 text-miss-500 hover:text-miss-700"
             aria-label="Dismiss"
           >
             ✕
@@ -155,32 +159,20 @@ export function GameBoard({ gameDate, heading }: Props) {
       {/* Lifelines */}
       <LifelinePanel game={game} clues={clues} onUse={(attr) => void useLifeline(attr)} />
 
-      {/* Guess history -- newest first so the latest result is visible
-          without scrolling on a phone. */}
-      <section className="space-y-3">
-        {guesses.length === 0 ? (
-          <div className="card px-5 py-8 text-center">
-            <p className="text-sm text-slate-400">
-              The mystery movie is a Telugu film released between 2000 and 2023.
-            </p>
-            <p className="mt-1 text-xs text-slate-600">
-              Make your first guess — matching attributes will be revealed.
-            </p>
-          </div>
-        ) : (
-          <>
-            <h2 className="label px-1">Your guesses</h2>
-            {[...guesses].reverse().map((result, index) => (
-              <GuessRow
-                key={`${result.movie_id}-${result.attempt ?? index}`}
-                result={result}
-                attempt={result.attempt ?? guesses.length - index}
-                isLatest={index === 0}
-              />
-            ))}
-          </>
-        )}
-      </section>
+      {/* Feedback -- one panel for the latest guess, with earlier attempts
+          collapsed to a single line each. */}
+      {guesses.length === 0 ? (
+        <div className="card px-5 py-8 text-center">
+          <p className="text-sm text-slate-600">
+            The mystery movie is a Telugu film released between 2000 and 2023.
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Make your first guess — matching attributes will be revealed.
+          </p>
+        </div>
+      ) : (
+        <GuessFeedback guesses={latestFirst} />
+      )}
 
       {!isActive && !showResult && (
         <button

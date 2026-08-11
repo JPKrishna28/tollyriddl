@@ -18,7 +18,7 @@ function Detail({ label, values }: { label: string; values: string[] }) {
   return (
     <div>
       <p className="label">{label}</p>
-      <p className="mt-0.5 text-sm text-slate-200">{values.join(' · ')}</p>
+      <p className="mt-0.5 text-sm text-slate-800">{values.join(' · ')}</p>
     </div>
   );
 }
@@ -47,7 +47,7 @@ export function ResultModal({ game, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="result-title"
@@ -58,10 +58,10 @@ export function ResultModal({ game, onClose }: Props) {
         onClick={(event) => event.stopPropagation()}
       >
         <header
-          className={`px-6 py-5 text-center ${
+          className={`border-b px-6 py-5 text-center ${
             won
-              ? 'bg-gradient-to-b from-gold-500/20 to-transparent'
-              : 'bg-gradient-to-b from-white/5 to-transparent'
+              ? 'border-match-200 bg-match-50'
+              : 'border-miss-200 bg-miss-50'
           }`}
         >
           <p className="text-3xl" aria-hidden>
@@ -69,11 +69,13 @@ export function ResultModal({ game, onClose }: Props) {
           </p>
           <h2
             id="result-title"
-            className="mt-2 font-display text-2xl font-bold tracking-tight text-slate-50"
+            className={`mt-2 font-display text-2xl font-bold tracking-tight ${
+              won ? 'text-match-700' : 'text-miss-700'
+            }`}
           >
             {won ? 'You got it!' : 'Game over'}
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-slate-600">
             {won
               ? `Solved in ${game.attempts_used} of ${game.max_attempts} attempts`
               : "Today's mystery movie was"}
@@ -81,7 +83,7 @@ export function ResultModal({ game, onClose }: Props) {
         </header>
 
         <div className="px-6 pb-2">
-          <h3 className="text-center font-display text-xl font-semibold text-gold-400">
+          <h3 className="mt-4 text-center font-display text-xl font-semibold text-slate-900">
             {movie.title}
           </h3>
           {movie.year && (
@@ -100,7 +102,7 @@ export function ResultModal({ game, onClose }: Props) {
           </div>
         </div>
 
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-white/5 px-6 py-4">
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-6 py-4">
           <div className="text-xs text-slate-500">
             {duration && <span>Time {duration}</span>}
             {movie.wikipedia_url && (
@@ -110,7 +112,7 @@ export function ResultModal({ game, onClose }: Props) {
                   href={movie.wikipedia_url}
                   target="_blank"
                   rel="noreferrer noopener"
-                  className="underline underline-offset-2 hover:text-slate-300"
+                  className="underline underline-offset-2 hover:text-slate-900"
                 >
                   Wikipedia
                 </a>

@@ -30,7 +30,7 @@ export function LifelinePanel({ game, clues, onUse }: Props) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span aria-hidden>🔓</span>
-          <h2 className="font-display text-sm font-semibold tracking-wide text-slate-200">
+          <h2 className="font-display text-sm font-semibold tracking-wide text-slate-900">
             Lifelines
           </h2>
         </div>
@@ -44,10 +44,10 @@ export function LifelinePanel({ game, clues, onUse }: Props) {
           {clues.map((clue) => (
             <li
               key={clue.attribute}
-              className="animate-pop-in rounded-lg border border-gold-500/20 bg-gold-500/5 px-3 py-2"
+              className="animate-pop-in rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
             >
-              <p className="label text-gold-500/80">{ATTRIBUTE_LABELS[clue.attribute]}</p>
-              <p className="mt-0.5 text-sm font-medium text-gold-400">
+              <p className="label">{ATTRIBUTE_LABELS[clue.attribute]}</p>
+              <p className="mt-0.5 text-sm font-medium text-slate-900">
                 {clue.values.join(' · ')}
               </p>
             </li>
@@ -75,7 +75,7 @@ export function LifelinePanel({ game, clues, onUse }: Props) {
           </button>
         ) : (
           <div className="space-y-2">
-            <p className="text-xs text-slate-400">Choose a clue to reveal:</p>
+            <p className="text-xs text-slate-600">Choose a clue to reveal:</p>
             <div className="flex flex-wrap gap-2">
               {available.map((attribute) => (
                 <button
@@ -93,7 +93,7 @@ export function LifelinePanel({ game, clues, onUse }: Props) {
             </div>
             <button
               type="button"
-              className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-300"
+              className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-900"
               onClick={() => setPicking(false)}
             >
               Cancel
