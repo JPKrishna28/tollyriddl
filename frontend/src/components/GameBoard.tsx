@@ -1,8 +1,9 @@
 // The main game screen.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { GuessFeedback } from '@/components/GuessFeedback';
+import { AttributePanel } from '@/components/AttributePanel';
+import { GuessSlots } from '@/components/GuessSlots';
 import { LifelinePanel } from '@/components/LifelinePanel';
 import { MovieSearch } from '@/components/MovieSearch';
 import { ResultModal } from '@/components/ResultModal';
@@ -13,19 +14,24 @@ interface Props {
   heading?: string;
 }
 
-function AttemptPips({ used, max }: { used: number; max: number }) {
-  return (
-    <div className="flex items-center gap-1" aria-hidden>
-      {Array.from({ length: max }, (_, index) => (
-        <span
-          key={index}
-          className={`h-1.5 w-5 rounded-full transition-colors ${
-            index < used ? 'bg-slate-800' : 'bg-slate-200'
-          }`}
-        />
-      ))}
-    </div>
-  );
+/** Puzzle index, counted from the first playable date. */
+const PUZZLE_EPOCH = '2024-01-01';
+
+function puzzleNumber(gameDate: string): number {
+  const start = Date.parse(`${PUZZLE_EPOCH}T00:00:00`);
+  const current = Date.parse(`${gameDate}T00:00:00`);
+  if (Number.isNaN(start) || Number.isNaN(current)) return 0;
+  return Math.floor((current - start) / 86_400_000) + 1;
+}
+
+function formatGameDate(gameDate: string): string {
+  const parsed = new Date(`${gameDate}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return gameDate;
+  return parsed.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 export function GameBoard({ gameDate, heading }: Props) {
@@ -45,10 +51,6 @@ export function GameBoard({ gameDate, heading }: Props) {
 
   const [showResult, setShowResult] = useState(false);
 
-  // Newest first. Memoised so the reversed copy is not rebuilt on every
-  // keystroke in the search box.
-  const latestFirst = useMemo(() => [...guesses].reverse(), [guesses]);
-
   // Pop the result modal automatically when the game ends.
   useEffect(() => {
     if (game && game.status !== 'active' && game.mystery_movie) {
@@ -58,10 +60,19 @@ export function GameBoard({ gameDate, heading }: Props) {
 
   if (loading) {
     return (
-      <div className="space-y-4" aria-busy="true" aria-live="polite">
-        <div className="card h-28 animate-pulse" />
-        <div className="card h-14 animate-pulse" />
-        <div className="card h-40 animate-pulse" />
+      <div
+        className="grid gap-6 lg:grid-cols-2 lg:items-start"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <div className="space-y-4">
+          <div className="h-44 animate-pulse rounded-2xl bg-slate-100" />
+          <div className="h-52 animate-pulse rounded-2xl bg-slate-100" />
+        </div>
+        <div className="space-y-4">
+          <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
+          <div className="h-14 animate-pulse rounded-2xl bg-slate-100" />
+        </div>
         <span className="sr-only">Loading today’s puzzle…</span>
       </div>
     );
@@ -83,106 +94,99 @@ export function GameBoard({ gameDate, heading }: Props) {
   const outOfAttempts = game.attempts_remaining <= 0;
 
   return (
-    <div className="space-y-5">
-      {/* Status header */}
-      <section className="card px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="label">{heading ?? 'Today’s mystery movie'}</p>
-            <p className="mt-1 font-display text-lg font-semibold text-slate-900">
-              Guess the Telugu movie
-            </p>
-          </div>
-          <div className="text-right">
-            <p className="font-display text-xl font-bold text-slate-900">
-              {game.attempts_used}
-              <span className="text-slate-400"> / {game.max_attempts}</span>
-            </p>
-            <p className="text-[0.7rem] uppercase tracking-wider text-slate-500">attempts</p>
-          </div>
-        </div>
-        <div className="mt-3">
-          <AttemptPips used={game.attempts_used} max={game.max_attempts} />
-        </div>
-      </section>
+    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+      {/* Left on desktop, but ordered *second* on mobile: the attribute
+          board is tall, and stacking it first would push the search box
+          below the fold on a phone. */}
+      <div className="order-2 lg:order-1">
+        <AttributePanel guesses={guesses} clues={clues} />
+      </div>
 
-      {/* Guess input */}
-      {isActive && !outOfAttempts && (
-        <section className="space-y-2">
-          <MovieSearch
-            onSelect={(movie) => void submitGuess(movie.id)}
-            disabled={submitting}
-            guessedIds={guessedIds}
+      {/* Right: attempts, lifelines and the search box. */}
+      <div className="order-1 space-y-4 lg:order-2">
+        <header className="flex items-baseline justify-between gap-3">
+          <span className="text-sm font-semibold text-slate-500">
+            #{puzzleNumber(game.game_date)}
+          </span>
+          <span className="text-sm text-slate-500">
+            {heading ?? formatGameDate(game.game_date)}
+          </span>
+        </header>
+
+        <GuessSlots guesses={guesses} maxAttempts={game.max_attempts} />
+
+        <div className="border-t border-slate-200 pt-4">
+          <LifelinePanel
+            game={game}
+            clues={clues}
+            onUse={(attr) => void useLifeline(attr)}
+            busy={submitting}
           />
-          {submitting && <p className="text-xs text-slate-500">Checking your guess…</p>}
-        </section>
-      )}
+        </div>
 
-      {/* Bonus unlock prompt */}
-      {game.bonus_available && (
-        <section className="card animate-fade-up p-5 text-center">
-          <p className="font-display text-base font-semibold text-slate-900">
-            Out of guesses — unlock 3 more?
-          </p>
-          <p className="mt-1 text-sm text-slate-600">
-            You have used all {game.base_attempts} attempts. Take {game.bonus_attempts}{' '}
-            more to crack it.
-          </p>
+        {/* Guess input */}
+        {isActive && !outOfAttempts && (
+          <div className="space-y-2">
+            <MovieSearch
+              onSelect={(movie) => void submitGuess(movie.id)}
+              disabled={submitting}
+              guessedIds={guessedIds}
+            />
+            {submitting && (
+              <p className="text-xs text-slate-500">Checking your guess…</p>
+            )}
+          </div>
+        )}
+
+        {/* Bonus unlock prompt */}
+        {game.bonus_available && (
+          <section className="card animate-fade-up p-5 text-center">
+            <p className="font-display text-base font-semibold text-slate-900">
+              Out of guesses — unlock 3 more?
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              You have used all {game.base_attempts} attempts. Take{' '}
+              {game.bonus_attempts} more to crack it.
+            </p>
+            <button
+              type="button"
+              className="btn-primary mt-4"
+              disabled={submitting}
+              onClick={() => void unlockBonus()}
+            >
+              Unlock 3 more guesses
+            </button>
+          </section>
+        )}
+
+        {error && (
+          <div
+            role="alert"
+            className="flex items-start justify-between gap-3 rounded-xl border border-miss-200
+                       bg-miss-50 px-4 py-3 text-sm text-miss-700"
+          >
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={dismissError}
+              className="shrink-0 text-miss-500 hover:text-miss-700"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {!isActive && !showResult && (
           <button
             type="button"
-            className="btn-primary mt-4"
-            onClick={() => void unlockBonus()}
+            className="btn-ghost w-full"
+            onClick={() => setShowResult(true)}
           >
-            Unlock 3 more guesses
+            Show the answer
           </button>
-        </section>
-      )}
-
-      {error && (
-        <div
-          role="alert"
-          className="flex items-start justify-between gap-3 rounded-xl border border-miss-200
-                     bg-miss-50 px-4 py-3 text-sm text-miss-700"
-        >
-          <span>{error}</span>
-          <button
-            type="button"
-            onClick={dismissError}
-            className="shrink-0 text-miss-500 hover:text-miss-700"
-            aria-label="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* Lifelines */}
-      <LifelinePanel game={game} clues={clues} onUse={(attr) => void useLifeline(attr)} />
-
-      {/* Feedback -- one panel for the latest guess, with earlier attempts
-          collapsed to a single line each. */}
-      {guesses.length === 0 ? (
-        <div className="card px-5 py-8 text-center">
-          <p className="text-sm text-slate-600">
-            The mystery movie is a Telugu film released between 2000 and 2023.
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            Make your first guess — matching attributes will be revealed.
-          </p>
-        </div>
-      ) : (
-        <GuessFeedback guesses={latestFirst} />
-      )}
-
-      {!isActive && !showResult && (
-        <button
-          type="button"
-          className="btn-ghost w-full"
-          onClick={() => setShowResult(true)}
-        >
-          Show the answer
-        </button>
-      )}
+        )}
+      </div>
 
       {showResult && game.status !== 'active' && (
         <ResultModal game={game} onClose={() => setShowResult(false)} />

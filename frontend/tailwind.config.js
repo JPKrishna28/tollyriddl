@@ -26,6 +26,15 @@ export default {
           600: '#9a4541',
           700: '#7d3835',
         },
+        // Crew attributes (director / production / music / writer) read as a
+        // third group. Muted indigo to match the red and green in weight.
+        crew: {
+          50: '#f2f3f9',
+          200: '#cdd0e6',
+          500: '#5b6091',
+          600: '#4b4f79',
+          700: '#3c3f61',
+        },
       },
       fontFamily: {
         display: ['"Bricolage Grotesque"', 'Georgia', 'serif'],

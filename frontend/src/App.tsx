@@ -21,7 +21,7 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 pb-16 pt-6 sm:px-6">
+    <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 pb-16 pt-6 sm:px-6">
       <header className="mb-6">
         <div className="flex items-center justify-between gap-3">
           <Link to="/" className="group flex items-center gap-2">
