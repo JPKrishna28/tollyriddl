@@ -142,14 +142,14 @@ export function GuessFeedback({ guesses }: Props) {
             </p>
             {latest.cast.common.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
+                {/* Only the shared actor's name is shown. Their billing rank
+                    in the mystery film is deliberately withheld -- printing
+                    it hands over ordering information the player should have
+                    to deduce. */}
                 {latest.cast.common.map((match) => (
                   <span key={match.name} className="chip chip-match">
                     <span aria-hidden>✓</span>
                     {match.name}
-                    {/* Billing position in the mystery film is a real clue. */}
-                    <span className="ml-0.5 text-[0.65rem] text-match-600">
-                      #{match.mystery_position}
-                    </span>
                   </span>
                 ))}
               </div>

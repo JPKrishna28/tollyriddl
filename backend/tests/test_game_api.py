@@ -74,11 +74,15 @@ class TestGuessing:
         assert response.status_code == 200
         result = response.json()["result"]
 
-        # Same year -> revealed; shared actor -> revealed with positions.
+        # Same year -> revealed; shared actor -> name revealed.
         assert result["year"]["status"] == "correct"
         assert result["year"]["mystery"] == 2015
         assert [m["name"] for m in result["cast"]["common"]] == ["Actor C"]
-        assert result["cast"]["common"][0]["mystery_position"] == 3
+
+        # The actor's billing rank in the *mystery* film stays server-side:
+        # sending it would leak ordering the player must deduce.
+        assert "mystery_position" not in result["cast"]["common"][0]
+        assert result["cast"]["common"][0]["guess_position"] == 1
 
         # Nothing else is shared, so nothing else is disclosed.
         assert result["director"]["common"] == []

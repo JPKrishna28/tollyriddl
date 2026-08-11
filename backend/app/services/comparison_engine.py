@@ -108,11 +108,17 @@ class CastMatch:
     mystery_position: int  # 1-indexed position in the mystery film
 
     def to_dict(self) -> dict[str, Any]:
+        """Wire shape for a shared actor.
+
+        ``mystery_position`` is deliberately **not** serialised. It stays on
+        the dataclass for server-side use, but sending it would leak the
+        mystery film's billing order to anyone reading the network response
+        -- hiding it in the UI alone would not actually hide it.
+        """
         return {
             "name": self.name,
             "position": self.guess_position,
             "guess_position": self.guess_position,
-            "mystery_position": self.mystery_position,
         }
 
 

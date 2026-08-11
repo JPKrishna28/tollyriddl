@@ -41,7 +41,7 @@ export interface CastMatch {
   name: string;
   position: number;
   guess_position: number;
-  mystery_position: number;
+  /** Billing rank in the mystery film is intentionally not sent by the API. */
 }
 
 export interface CastResult {
