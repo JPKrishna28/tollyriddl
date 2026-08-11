@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tollyriddl-backend"
+version = "1.0.0"
+description = "Telugu Riddle game backend (FastAPI + SQLAlchemy)"
+requires-python = ">=3.11"
+# Upper bounds are deliberate, not lazy pinning. Starlette 1.x changed
+# router internals so that `include_router` silently attaches no routes:
+# the app boots and serves /docs while every business endpoint 404s (or
+# 500s once the frontend calls it). FastAPI < 0.116 constrains Starlette
+# to the 0.3x line that this code is tested against.
+dependencies = [
+    "fastapi>=0.115.0,<0.116",
+    "starlette>=0.37,<0.42",
+    "sqlalchemy>=2.0.36,<3",
+    "psycopg[binary]>=3.2.0,<4",
+    "pydantic>=2.9.0,<3",
+    "python-dotenv>=1.0.1,<2",
+]
+
+# Only the application package ships. Tests, scripts and SQL stay out of
+# the serverless bundle.
+[tool.setuptools.packages.find]
+include = ["app*"]

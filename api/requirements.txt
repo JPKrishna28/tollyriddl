@@ -1,0 +1,11 @@
+# Dependencies for the Vercel Python function (api/index.py).
+#
+# Vercel's Python runtime installs the requirements.txt that sits NEXT TO
+# the function, so this file (not the repository root one, which belongs
+# to the scraper) is what the deployment uses.
+#
+# The backend is installed as a real package from ../backend. That keeps
+# a single source of truth -- no duplicated app tree to drift -- and lets
+# Vercel bundle it as an ordinary site-packages dependency rather than
+# relying on a runtime sys.path hack it cannot trace.
+../backend

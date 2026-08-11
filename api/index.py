@@ -1,20 +1,14 @@
 """Vercel serverless entry point.
 
 Vercel's Python runtime looks for an ASGI callable named ``app`` in this
-file. The real application lives in ``backend/app`` so it stays testable
-and runnable with plain uvicorn locally.
+file. The application itself lives in ``backend/app`` and is installed as
+a package (see ``api/requirements.txt``), so it resolves as an ordinary
+import here -- no sys.path manipulation, which Vercel's dependency tracer
+cannot follow.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-# The backend package sits outside this directory in the deployment bundle.
-BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
-
-from app.main import app  # noqa: E402
+from app.main import app
 
 __all__ = ["app"]
