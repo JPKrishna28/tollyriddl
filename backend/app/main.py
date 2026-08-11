@@ -50,6 +50,23 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
     )
 
 
+@app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Log the traceback before returning 500.
+
+    Without this, an unexpected error propagates into the serverless
+    runtime and the platform logs only the bare status line -- the
+    traceback is lost, which makes production 500s undiagnosable.
+    """
+    logging.getLogger("app").exception(
+        "Unhandled error on %s %s", request.method, request.url.path
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error.", "code": "internal_error"},
+    )
+
+
 @app.get("/api")
 def api_root() -> dict:
     return {

@@ -15,6 +15,7 @@ import hashlib
 from datetime import date, timedelta
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -154,7 +155,17 @@ def get_or_create_daily_game(session: Session, game_date: date) -> DailyGame | N
 
     daily = DailyGame(game_date=game_date, mystery_movie_id=movie_id)
     session.add(daily)
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError:
+        # Two concurrent cold starts can both miss the SELECT above and
+        # race to insert the same date. ``game_date`` is unique, so the
+        # loser must adopt the winner's row instead of failing the
+        # request -- both callers need the same puzzle anyway.
+        session.rollback()
+        return session.execute(
+            select(DailyGame).where(DailyGame.game_date == game_date)
+        ).scalar_one_or_none()
     return daily
 
 
