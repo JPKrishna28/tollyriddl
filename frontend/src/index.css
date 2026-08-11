@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-ink-950 text-slate-100 antialiased;
+    /* Subtle spotlight so the board reads as a stage rather than a form. */
+    background-image:
+      radial-gradient(60rem 40rem at 50% -10%, rgba(230, 169, 44, 0.10), transparent 60%),
+      radial-gradient(40rem 30rem at 10% 110%, rgba(56, 189, 248, 0.06), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  /* Telugu script needs a font that actually covers the glyphs. */
+  :lang(te) {
+    font-family: 'Noto Sans Telugu', 'Gautami', sans-serif;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-white/5 bg-ink-900/70 shadow-lg shadow-black/30 backdrop-blur-sm;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium leading-none;
+  }
+
+  .chip-match {
+    @apply bg-match-500/15 text-match-400 ring-1 ring-inset ring-match-500/30;
+  }
+
+  .chip-miss {
+    @apply bg-white/5 text-slate-400 ring-1 ring-inset ring-white/10;
+  }
+
+  .chip-gold {
+    @apply bg-gold-500/15 text-gold-400 ring-1 ring-inset ring-gold-500/30;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+           transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/70
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-gold-500 text-ink-950 hover:bg-gold-400;
+  }
+
+  .btn-ghost {
+    @apply btn border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10;
+  }
+
+  .label {
+    @apply text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-slate-500;
+  }
+}
+
+/* Respect the OS "reduce motion" setting: keep meaning, drop movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

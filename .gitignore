@@ -1,0 +1,48 @@
+# Scraper artifacts
+cache/
+logs/
+output/
+*.db
+*.sqlite
+*.sqlite3
+progress.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# Tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets
+.env
+.env.local
+config/secrets.py
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Vercel
+.vercel/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
