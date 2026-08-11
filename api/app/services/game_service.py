@@ -16,7 +16,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.models import DailyGame, GameSession, GameStatus, Guess, Lifeline, Movie
@@ -238,10 +238,16 @@ def revealed_attributes(session: Session, game: GameSession) -> set[str]:
         return known
 
     mystery = _engine_movie(_mystery_movie(session, game))
-    for guess in game.guesses:
-        movie = session.get(Movie, guess.movie_id)
-        if movie is None:  # pragma: no cover - FK protects this
-            continue
+
+    # Bulk-load for the same reason as build_guess_history: one query with
+    # the child collections joined, not three round-trips per guess.
+    rows = session.execute(
+        select(Movie)
+        .where(Movie.id.in_([guess.movie_id for guess in game.guesses]))
+        .options(selectinload(Movie.genres), selectinload(Movie.cast))
+    ).scalars()
+
+    for movie in rows:
         known |= compare(mystery, _engine_movie(movie)).revealed_attributes()
     return known
 
@@ -354,11 +360,29 @@ def use_lifeline(session: Session, game_id: str, attribute: str) -> dict[str, An
 
 
 def build_guess_history(session: Session, game: GameSession) -> list[dict[str, Any]]:
-    """Replay every guess so a refreshed client can rebuild the board."""
+    """Replay every guess so a refreshed client can rebuild the board.
+
+    Every guessed movie is loaded in **one** query with its genres and cast
+    eagerly joined. Fetching them one at a time issued three round-trips
+    per guess (the row, then its genres, then its cast); against a remote
+    pooler that grew linearly with the guess count until the request
+    exceeded the function's time budget and returned a 500.
+    """
     mystery = _engine_movie(_mystery_movie(session, game))
+
+    movie_ids = [guess.movie_id for guess in game.guesses]
+    movies: dict[int, Movie] = {}
+    if movie_ids:
+        rows = session.execute(
+            select(Movie)
+            .where(Movie.id.in_(movie_ids))
+            .options(selectinload(Movie.genres), selectinload(Movie.cast))
+        ).scalars()
+        movies = {movie.id: movie for movie in rows}
+
     history: list[dict[str, Any]] = []
     for guess in game.guesses:
-        movie = session.get(Movie, guess.movie_id)
+        movie = movies.get(guess.movie_id)
         if movie is None:  # pragma: no cover
             continue
         payload = compare(mystery, _engine_movie(movie)).to_dict()
