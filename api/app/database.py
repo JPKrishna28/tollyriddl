@@ -47,11 +47,18 @@ def get_session_factory() -> sessionmaker[Session]:
 
 
 def get_db() -> Generator[Session, None, None]:
-    """FastAPI dependency yielding a request-scoped session."""
+    """FastAPI dependency yielding a request-scoped session.
+
+    The session is *not* committed here. Committing during dependency
+    teardown runs after the response has already been generated, so a
+    failure at that point cannot be turned into a proper error response --
+    it escapes the application entirely and the platform emits a bare 500
+    with no traceback. Write endpoints commit explicitly instead, inside
+    the request, where errors are catchable.
+    """
     session = get_session_factory()()
     try:
         yield session
-        session.commit()
     except Exception:
         session.rollback()
         raise

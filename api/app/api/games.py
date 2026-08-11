@@ -30,6 +30,27 @@ def _handle(error: GameError) -> HTTPException:
     )
 
 
+def _commit(db: Session) -> None:
+    """Commit inside the request so failures are still catchable.
+
+    ``get_db`` deliberately does not commit: doing so during dependency
+    teardown happens after the response exists, so a dropped connection
+    there escapes as an opaque 500. Committing here turns the same failure
+    into a structured 503 the client can act on.
+    """
+    try:
+        db.commit()
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "detail": "Could not save your progress. Please retry.",
+                "code": "commit_failed",
+            },
+        ) from error
+
+
 def _resolve_today(client_date: date | None) -> date:
     """Decide what 'today' means.
 
@@ -63,6 +84,9 @@ def today(
             detail={"detail": "No eligible movies available.", "code": "no_eligible_movies"},
         )
 
+    # This GET can lazily pin a new daily row, which must be persisted.
+    _commit(db)
+
     return {
         "game_date": game_date.isoformat(),
         "available": True,
@@ -88,7 +112,9 @@ def start(
     except GameError as error:
         raise _handle(error) from error
 
-    return game_service.serialize_game(db, game)
+    payload = game_service.serialize_game(db, game)
+    _commit(db)
+    return payload
 
 
 @router.get("/archive")
@@ -162,6 +188,9 @@ def archive_date(
             detail={"detail": "No eligible movies available.", "code": "no_eligible_movies"},
         )
 
+    # As with /today, this may have pinned a new daily row.
+    _commit(db)
+
     return {"game_date": game_date.isoformat(), "available": True}
 
 
@@ -183,11 +212,13 @@ def guess(game_id: str, payload: GuessRequest, db: Session = Depends(get_db)) ->
     except GameError as error:
         raise _handle(error) from error
 
-    return {
+    response = {
         "attempt": outcome.attempt_number,
         "result": outcome.result,
         "game": game_service.serialize_game(db, outcome.session, include_history=False),
     }
+    _commit(db)
+    return response
 
 
 @router.post("/{game_id}/lifeline")
@@ -201,10 +232,12 @@ def lifeline(
     except GameError as error:
         raise _handle(error) from error
 
-    return {
+    response = {
         "revealed": revealed,
         "game": game_service.serialize_game(db, game, include_history=False),
     }
+    _commit(db)
+    return response
 
 
 @router.post("/{game_id}/unlock-bonus")
@@ -214,4 +247,7 @@ def unlock_bonus(game_id: str, db: Session = Depends(get_db)) -> dict:
         game = game_service.unlock_bonus(db, game_id)
     except GameError as error:
         raise _handle(error) from error
-    return game_service.serialize_game(db, game)
+
+    payload = game_service.serialize_game(db, game)
+    _commit(db)
+    return payload

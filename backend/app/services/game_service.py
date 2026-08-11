@@ -15,6 +15,7 @@ from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -175,7 +176,19 @@ def submit_guess(session: Session, game_id: str, movie_id: int) -> GuessOutcome:
         game.status = GameStatus.LOST
         game.completed_at = _utcnow()
 
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError as error:
+        # Same race as the lifeline path: concurrent submissions can pick
+        # the same ``attempt_number`` (or resubmit the same movie), and the
+        # unique constraints reject the loser.
+        session.rollback()
+        raise GameError(
+            "That guess was already recorded.",
+            code="guess_conflict",
+            status=409,
+        ) from error
+
     return GuessOutcome(
         session=game, result=comparison.to_dict(), attempt_number=attempt_number
     )
@@ -313,7 +326,20 @@ def use_lifeline(session: Session, game_id: str, attribute: str) -> dict[str, An
             created_at=_utcnow(),
         )
     )
-    session.flush()
+    try:
+        session.flush()
+    except IntegrityError as error:
+        # Two in-flight requests (a double-tap, or a retry) both read the
+        # same ``used`` count and pick the same ``lifeline_number``. The
+        # unique constraints then reject the loser. Postgres surfaces this
+        # as IntegrityError rather than blocking, so it must be turned into
+        # a normal 409 instead of escaping as a 500.
+        session.rollback()
+        raise GameError(
+            "That lifeline was already spent.",
+            code="lifeline_conflict",
+            status=409,
+        ) from error
 
     return {
         "attribute": attribute,
