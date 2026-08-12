@@ -292,6 +292,48 @@ class TestArchiveAndDates:
         payload = client.get("/api/games/archive?limit=5").json()
         assert "Mystery Film" not in str(payload)
 
+    def test_archive_reports_session_outcomes_per_date(
+        self, client, db_session, sample_movies
+    ) -> None:
+        """Each date reports the status of its own sessions.
+
+        The listing resolves every date in one join, so a mix of outcomes
+        across dates must not bleed from one entry into another.
+        """
+        from app.models import DailyGame, GameSession, GameStatus
+
+        today = date.today()
+        expected = {
+            (today - timedelta(days=1)): GameStatus.WON,
+            (today - timedelta(days=2)): GameStatus.LOST,
+            (today - timedelta(days=3)): GameStatus.ACTIVE,
+        }
+        mystery_id = movie_id(sample_movies, "Mystery Film")
+
+        for game_date, status in expected.items():
+            daily = DailyGame(game_date=game_date, mystery_movie_id=mystery_id)
+            db_session.add(daily)
+            db_session.flush()
+            db_session.add(
+                GameSession(
+                    id=f"session-{game_date.isoformat()}",
+                    daily_game_id=daily.id,
+                    status=status,
+                )
+            )
+        db_session.commit()
+
+        entries = {
+            entry["game_date"]: entry["status"]
+            for entry in client.get("/api/games/archive?limit=10").json()["entries"]
+        }
+
+        assert entries[(today - timedelta(days=1)).isoformat()] == "won"
+        assert entries[(today - timedelta(days=2)).isoformat()] == "lost"
+        assert entries[(today - timedelta(days=3)).isoformat()] == "in_progress"
+        # A date with no DailyGame row at all stays untouched.
+        assert entries[(today - timedelta(days=4)).isoformat()] == "not_played"
+
     def test_client_date_cannot_skip_far_ahead(self, client) -> None:
         """A tampered local clock must not unlock future puzzles."""
         far_future = (date.today() + timedelta(days=400)).isoformat()

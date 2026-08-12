@@ -131,30 +131,38 @@ def archive(
     today_date = _resolve_today(client_date)
     dates = daily_movie_service.archive_dates(today_date, limit=limit)
 
+    # One join for every date in the window. Querying sessions per date
+    # inside the loop below meant up to ``limit`` sequential round-trips,
+    # which overran the function timeout and returned a 504.
     rows = db.execute(
-        select(DailyGame).where(DailyGame.game_date.in_(dates))
-    ).scalars()
-    daily_by_date = {row.game_date: row for row in rows}
+        select(DailyGame.game_date, GameSession.status)
+        .select_from(DailyGame)
+        .outerjoin(GameSession, GameSession.daily_game_id == DailyGame.id)
+        .where(DailyGame.game_date.in_(dates))
+    ).all()
+
+    statuses_by_date: dict[date, set[str]] = {}
+    for game_date, session_status in rows:
+        bucket = statuses_by_date.setdefault(game_date, set())
+        if session_status is None:
+            continue
+        bucket.add(
+            session_status.value
+            if isinstance(session_status, GameStatus)
+            else session_status
+        )
 
     entries: list[dict] = []
     for game_date in dates:
-        daily = daily_by_date.get(game_date)
+        statuses = statuses_by_date.get(game_date, set())
         status = "not_played"
 
-        if daily is not None:
-            sessions = db.execute(
-                select(GameSession).where(GameSession.daily_game_id == daily.id)
-            ).scalars()
-            statuses = {
-                (s.status.value if isinstance(s.status, GameStatus) else s.status)
-                for s in sessions
-            }
-            if GameStatus.WON.value in statuses:
-                status = "won"
-            elif GameStatus.LOST.value in statuses:
-                status = "lost"
-            elif GameStatus.ACTIVE.value in statuses:
-                status = "in_progress"
+        if GameStatus.WON.value in statuses:
+            status = "won"
+        elif GameStatus.LOST.value in statuses:
+            status = "lost"
+        elif GameStatus.ACTIVE.value in statuses:
+            status = "in_progress"
 
         entries.append(
             {
