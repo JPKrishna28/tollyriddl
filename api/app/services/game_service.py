@@ -227,17 +227,30 @@ def unlock_bonus(session: Session, game_id: str) -> GameSession:
 
 
 def revealed_attributes(session: Session, game: GameSession) -> set[str]:
-    """Attributes the player already knows.
+    """Attributes the player knows *in full*.
 
     Combines clues earned through matching guesses with cells already
-    spent on a lifeline, so a lifeline is never offered for information
-    the player has.
+    spent on a lifeline. A lifeline now buys a single cell, so an attribute
+    only counts as known here once every one of its cells is uncovered --
+    a partially revealed cast is still worth spending on.
     """
-    known: set[str] = {row.attribute for row in game.lifelines}
+    mystery_movie = _mystery_movie(session, game)
+    known: set[str] = set()
+
+    # A single-celled attribute is fully known the moment its one cell is
+    # bought; a multi-celled one needs every cell.
+    by_attribute: dict[str, set[int]] = {}
+    for row in game.lifelines:
+        by_attribute.setdefault(row.attribute, set()).add(row.value_index)
+    for attribute, indexes in by_attribute.items():
+        total = len(attribute_value(_engine_movie(mystery_movie), attribute))
+        if total and len(indexes) >= total:
+            known.add(attribute)
+
     if not game.guesses:
         return known
 
-    mystery = _engine_movie(_mystery_movie(session, game))
+    mystery = _engine_movie(mystery_movie)
 
     # Bulk-load for the same reason as build_guess_history: one query with
     # the child collections joined, not three round-trips per guess.
@@ -252,21 +265,65 @@ def revealed_attributes(session: Session, game: GameSession) -> set[str]:
     return known
 
 
-def available_lifeline_attributes(session: Session, game: GameSession) -> list[str]:
-    """Cells a lifeline could still usefully reveal.
+def revealed_cells(session: Session, game: GameSession) -> dict[str, set[int]]:
+    """Per-cell map of what the player knows, keyed by attribute.
 
-    Excludes what the player already knows and anything the mystery movie
-    has no data for -- revealing an empty cell would waste the lifeline.
+    Indexes are positions in ``attribute_value`` order. Values learned from
+    a matching guess are resolved back to their index so a lifeline is never
+    sold a cell the board already shows.
+    """
+    mystery = _engine_movie(_mystery_movie(session, game))
+    cells: dict[str, set[int]] = {}
+
+    for row in game.lifelines:
+        cells.setdefault(row.attribute, set()).add(row.value_index)
+
+    # Attributes known outright from guesses count as every cell revealed.
+    for attribute in revealed_attributes(session, game):
+        total = len(attribute_value(mystery, attribute))
+        cells.setdefault(attribute, set()).update(range(total))
+
+    if not game.guesses:
+        return cells
+
+    rows = session.execute(
+        select(Movie)
+        .where(Movie.id.in_([guess.movie_id for guess in game.guesses]))
+        .options(selectinload(Movie.genres), selectinload(Movie.cast))
+    ).scalars()
+
+    # A guess sharing an actor already puts that name on the board, so the
+    # matching cell must not be resold as a lifeline.
+    for movie in rows:
+        comparison = compare(mystery, _engine_movie(movie))
+        for attribute in REVEALABLE_ATTRIBUTES:
+            shared = comparison.shared_values(attribute)
+            if not shared:
+                continue
+            values = attribute_value(mystery, attribute)
+            for index, value in enumerate(values):
+                if value in shared:
+                    cells.setdefault(attribute, set()).add(index)
+    return cells
+
+
+def available_lifeline_attributes(session: Session, game: GameSession) -> list[str]:
+    """Attributes with at least one cell a lifeline could still reveal.
+
+    Excludes attributes the player already knows in full and anything the
+    mystery movie has no data for -- revealing an empty cell would waste
+    the lifeline.
     """
     mystery = _mystery_movie(session, game)
     engine_movie = _engine_movie(mystery)
-    known = revealed_attributes(session, game)
+    known = revealed_cells(session, game)
 
     available: list[str] = []
     for attribute in REVEALABLE_ATTRIBUTES:
-        if attribute in known:
+        values = attribute_value(engine_movie, attribute)
+        if not values:
             continue
-        if not attribute_value(engine_movie, attribute):
+        if len(known.get(attribute, set())) >= len(values):
             continue
         available.append(attribute)
     return available
@@ -282,8 +339,18 @@ def lifelines_unlocked(game: GameSession) -> int:
     return unlocked
 
 
-def use_lifeline(session: Session, game_id: str, attribute: str) -> dict[str, Any]:
-    """Spend a lifeline to reveal one attribute of the mystery movie."""
+def use_lifeline(
+    session: Session,
+    game_id: str,
+    attribute: str,
+    value_index: int | None = None,
+) -> dict[str, Any]:
+    """Spend a lifeline to reveal a single cell of the mystery movie.
+
+    ``value_index`` picks which cell of a multi-valued attribute to uncover.
+    Omitting it takes the first cell the player does not already know, which
+    keeps single-valued attributes (year, director) a one-argument call.
+    """
     game = get_session(session, game_id)
 
     if not game.is_active:
@@ -291,6 +358,10 @@ def use_lifeline(session: Session, game_id: str, attribute: str) -> dict[str, An
             "This game is already complete.", code="game_complete", status=409
         )
 
+    # Read the count from the database rather than the cached relationship:
+    # a second lifeline spent in the same session would otherwise reuse a
+    # stale ``lifeline_number`` and collide on the unique constraint.
+    session.refresh(game, ["lifelines"])
     used = len(game.lifelines)
     unlocked = lifelines_unlocked(game)
 
@@ -323,12 +394,33 @@ def use_lifeline(session: Session, game_id: str, attribute: str) -> dict[str, An
 
     mystery = _mystery_movie(session, game)
     values = attribute_value(_engine_movie(mystery), attribute)
+    known = revealed_cells(session, game).get(attribute, set())
+
+    if value_index is None:
+        # Default to the first cell the player has not earned. ``available``
+        # guarantees one exists.
+        target = next(index for index in range(len(values)) if index not in known)
+    else:
+        if not 0 <= value_index < len(values):
+            raise GameError(
+                f"{attribute} has no cell at position {value_index}.",
+                code="bad_value_index",
+                status=400,
+            )
+        if value_index in known:
+            raise GameError(
+                "That cell is already revealed.",
+                code="cell_already_revealed",
+                status=409,
+            )
+        target = value_index
 
     session.add(
         Lifeline(
             game_session_id=game.id,
             lifeline_number=used + 1,
             attribute=attribute,
+            value_index=target,
             created_at=_utcnow(),
         )
     )
@@ -347,9 +439,17 @@ def use_lifeline(session: Session, game_id: str, attribute: str) -> dict[str, An
             status=409,
         ) from error
 
+    # The cached collection predates the insert above. Anything reading
+    # ``game.lifelines`` later in this request -- notably serialize_game --
+    # would otherwise miss the cell just bought.
+    session.expire(game, ["lifelines"])
+
     return {
         "attribute": attribute,
-        "values": values,
+        # A list of one: the client renders clue values uniformly, and the
+        # shape stays stable for attributes that are genuinely single-celled.
+        "values": [values[target]],
+        "value_index": target,
         "lifeline_number": used + 1,
     }
 
@@ -391,6 +491,21 @@ def build_guess_history(session: Session, game: GameSession) -> list[dict[str, A
     return history
 
 
+def _lifeline_values(
+    session: Session, game: GameSession, row: Lifeline
+) -> list[str]:
+    """The single value one spent lifeline uncovered.
+
+    Returns a list to match the shape ``use_lifeline`` returns. An empty
+    list means the movie's data shrank under a stored index, which should
+    not happen but must not break the board.
+    """
+    values = attribute_value(_engine_movie(_mystery_movie(session, game)), row.attribute)
+    if 0 <= row.value_index < len(values):
+        return [values[row.value_index]]
+    return []
+
+
 def serialize_game(
     session: Session, game: GameSession, *, include_history: bool = True
 ) -> dict[str, Any]:
@@ -415,8 +530,16 @@ def serialize_game(
             and game.attempts_used >= settings.base_attempts
             and game.status != GameStatus.WON
         ),
+        # Includes the value bought, so a refreshed client can rebuild the
+        # revealed cells. This discloses only what the player already paid
+        # for -- never an unbought cell.
         "lifelines_used": [
-            {"lifeline_number": row.lifeline_number, "attribute": row.attribute}
+            {
+                "lifeline_number": row.lifeline_number,
+                "attribute": row.attribute,
+                "value_index": row.value_index,
+                "values": _lifeline_values(session, game, row),
+            }
             for row in game.lifelines
         ],
         "lifelines_unlocked": lifelines_unlocked(game),

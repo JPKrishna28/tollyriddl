@@ -34,6 +34,14 @@ class GuessRequest(BaseModel):
 
 class LifelineRequest(BaseModel):
     attribute: str = Field(..., min_length=1, max_length=64)
+    value_index: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Which cell of a multi-valued attribute to uncover. Omitted means "
+            "the first cell the player does not already know."
+        ),
+    )
 
 
 class ErrorResponse(BaseModel):

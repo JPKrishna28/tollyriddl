@@ -133,6 +133,10 @@ class Lifeline(Base):
     )
     lifeline_number: Mapped[int] = mapped_column(Integer, nullable=False)
     attribute: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Which slot of a multi-valued attribute this bought. A lifeline reveals
+    # one cell, not a whole row, so "cast" can be spent more than once and
+    # each spend must record *which* actor it uncovered.
+    value_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     session: Mapped[GameSession] = relationship(back_populates="lifelines")
@@ -142,7 +146,13 @@ class Lifeline(Base):
         UniqueConstraint(
             "game_session_id", "lifeline_number", name="uq_lifeline_session_number"
         ),
+        # The same cell cannot be bought twice. Scoped to the slot rather
+        # than the attribute, so a second lifeline may still target another
+        # cell in the same row.
         UniqueConstraint(
-            "game_session_id", "attribute", name="uq_lifeline_session_attribute"
+            "game_session_id",
+            "attribute",
+            "value_index",
+            name="uq_lifeline_session_attribute_index",
         ),
     )

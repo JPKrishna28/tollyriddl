@@ -92,10 +92,19 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ guess_movie_id: movieId }) },
     ),
 
-  useLifeline: (gameId: string, attribute: RevealableAttribute) =>
+  // valueIndex picks a single cell within the attribute; omitting it lets
+  // the server take the first one the player has not already earned.
+  useLifeline: (
+    gameId: string,
+    attribute: RevealableAttribute,
+    valueIndex?: number,
+  ) =>
     request<{ revealed: RevealedClue; game: GameState }>(
       `/api/games/${gameId}/lifeline`,
-      { method: 'POST', body: JSON.stringify({ attribute }) },
+      {
+        method: 'POST',
+        body: JSON.stringify({ attribute, value_index: valueIndex }),
+      },
     ),
 
   unlockBonus: (gameId: string) =>

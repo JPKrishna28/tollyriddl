@@ -221,6 +221,23 @@ class ComparisonResult:
                 revealed.add(name)
         return revealed
 
+    def shared_values(self, attribute: str) -> set[str]:
+        """Values of ``attribute`` this guess put on the board.
+
+        A lifeline reveals one cell, so knowing *which* values a guess
+        already surfaced is what keeps a cell from being sold twice.
+        Cast matches carry position metadata, so they are flattened to
+        names to match ``attribute_value`` output.
+        """
+        if attribute == "year":
+            return {str(self.year.mystery)} if self.year.mystery is not None else set()
+        if attribute == "cast":
+            return {match.name for match in self.cast.common}
+        result = getattr(self, attribute, None)
+        if isinstance(result, SetResult):
+            return set(result.common)
+        return set()
+
 
 # ----------------------------------------------------------------------
 # Normalisation helpers

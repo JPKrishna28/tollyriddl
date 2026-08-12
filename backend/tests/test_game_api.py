@@ -214,6 +214,97 @@ class TestLifelines:
         )
         assert repeat.status_code == 409
 
+    def test_reveals_one_cell_not_the_whole_row(self, client, db_session) -> None:
+        """A lifeline on cast buys a single actor, not the entire cast."""
+        game = start_game(client)
+        _burn_attempts(db_session, game["game_id"], 4)
+
+        response = client.post(
+            f"/api/games/{game['game_id']}/lifeline", json={"attribute": "cast"}
+        )
+        assert response.status_code == 200
+        revealed = response.json()["revealed"]
+        # Mystery Film has three actors; only one may cross the wire.
+        assert len(revealed["values"]) == 1
+        assert revealed["values"][0] in {"Actor A", "Actor B", "Actor C"}
+        assert revealed["value_index"] == 0
+
+    def test_player_chooses_which_cell_to_reveal(self, client, db_session) -> None:
+        game = start_game(client)
+        _burn_attempts(db_session, game["game_id"], 4)
+
+        response = client.post(
+            f"/api/games/{game['game_id']}/lifeline",
+            json={"attribute": "cast", "value_index": 2},
+        )
+        assert response.status_code == 200
+        assert response.json()["revealed"]["values"] == ["Actor C"]
+
+    def test_multi_valued_attribute_can_be_bought_again(
+        self, client, db_session
+    ) -> None:
+        """cast stays available until every actor has been uncovered."""
+        game = start_game(client)
+        _burn_attempts(db_session, game["game_id"], 6)
+
+        first = client.post(
+            f"/api/games/{game['game_id']}/lifeline",
+            json={"attribute": "cast", "value_index": 0},
+        )
+        assert first.status_code == 200
+
+        state = client.get(f"/api/games/{game['game_id']}").json()
+        assert "cast" in state["lifelines_available"]
+
+        second = client.post(
+            f"/api/games/{game['game_id']}/lifeline",
+            json={"attribute": "cast", "value_index": 1},
+        )
+        assert second.status_code == 200
+        assert second.json()["revealed"]["values"] == ["Actor B"]
+
+    def test_the_same_cell_cannot_be_bought_twice(self, client, db_session) -> None:
+        game = start_game(client)
+        _burn_attempts(db_session, game["game_id"], 6)
+
+        client.post(
+            f"/api/games/{game['game_id']}/lifeline",
+            json={"attribute": "cast", "value_index": 1},
+        )
+        repeat = client.post(
+            f"/api/games/{game['game_id']}/lifeline",
+            json={"attribute": "cast", "value_index": 1},
+        )
+        assert repeat.status_code == 409
+        assert repeat.json()["detail"]["code"] == "cell_already_revealed"
+
+    def test_out_of_range_cell_rejected(self, client, db_session) -> None:
+        game = start_game(client)
+        _burn_attempts(db_session, game["game_id"], 4)
+        response = client.post(
+            f"/api/games/{game['game_id']}/lifeline",
+            json={"attribute": "cast", "value_index": 99},
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "bad_value_index"
+
+    def test_spent_cells_survive_a_reload(self, client, db_session) -> None:
+        """A refreshed client must rebuild exactly the cells it paid for."""
+        game = start_game(client)
+        _burn_attempts(db_session, game["game_id"], 4)
+        client.post(
+            f"/api/games/{game['game_id']}/lifeline",
+            json={"attribute": "cast", "value_index": 1},
+        )
+
+        state = client.get(f"/api/games/{game['game_id']}").json()
+        used = state["lifelines_used"]
+        assert len(used) == 1
+        assert used[0]["values"] == ["Actor B"]
+        assert used[0]["value_index"] == 1
+        # The unbought actors must not ride along in the payload.
+        assert "Actor C" not in str(used)
+
     def test_unknown_attribute_rejected(self, client, db_session) -> None:
         game = start_game(client)
         _burn_attempts(db_session, game["game_id"], 4)

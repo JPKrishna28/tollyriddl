@@ -4,8 +4,8 @@
 // clue the player already earned is never offered or wasted.
 //
 // Picking a clue happens on the board itself: arming a lifeline here makes
-// the still-hidden rows in AttributePanel clickable, so the player points at
-// the cell they want rather than matching a label to a row by name.
+// the still-hidden cells in AttributePanel clickable, so the player points at
+// the individual cell they want rather than uncovering a whole row at once.
 
 import { ATTRIBUTE_LABELS } from '@/types/game';
 import type { GameState, RevealedClue } from '@/types/game';
@@ -85,7 +85,7 @@ export function LifelinePanel({ game, clues, armed, onArm, busy }: Props) {
                   ? available.length === 0
                     ? 'No new clues available'
                     : isArmed
-                      ? 'Tap a row to reveal — cancel'
+                      ? 'Tap a cell to reveal — cancel'
                       : 'Reveal a cell'
                   : `Unlock Lifeline after ${threshold}th guess`}
             </button>

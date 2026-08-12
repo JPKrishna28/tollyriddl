@@ -83,6 +83,10 @@ export interface MysteryMovie {
 export interface LifelineUsed {
   lifeline_number: number;
   attribute: RevealableAttribute;
+  /** Which cell of the attribute this lifeline uncovered. */
+  value_index: number;
+  /** The single value bought, so a reload can rebuild the board. */
+  values: string[];
 }
 
 export interface GameState {
@@ -110,7 +114,9 @@ export interface GameState {
 
 export interface RevealedClue {
   attribute: RevealableAttribute;
+  /** Always a single value: a lifeline buys one cell, not a whole row. */
   values: string[];
+  value_index: number;
   lifeline_number: number;
 }
 

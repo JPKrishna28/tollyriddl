@@ -23,12 +23,12 @@ interface Props {
   yearFloor?: number;
   yearCeiling?: number;
   /**
-   * Lifeline targeting. When armed, still-hidden rows become buttons and
-   * clicking one spends the lifeline on that attribute.
+   * Lifeline targeting. When armed, each still-hidden *cell* becomes a
+   * button and clicking one spends the lifeline on that cell alone.
    */
   revealMode?: boolean;
   revealable?: RevealableAttribute[];
-  onReveal?: (attribute: RevealableAttribute) => void;
+  onReveal?: (attribute: RevealableAttribute, valueIndex?: number) => void;
 }
 
 type Group = 'year' | 'cast' | 'crew';
@@ -76,9 +76,11 @@ function confirmedValues(
     const result = guess[key] as SetResult;
     for (const value of result.common) found.add(value);
   }
-  // A lifeline reveals the cell outright, so it supersedes partial matches.
-  const clue = clues.find((entry) => entry.attribute === key);
-  if (clue) for (const value of clue.values) found.add(value);
+  // A lifeline buys one cell, and the same attribute can be bought more than
+  // once, so every matching clue contributes.
+  for (const clue of clues.filter((entry) => entry.attribute === key)) {
+    for (const value of clue.values) found.add(value);
+  }
   return [...found];
 }
 
@@ -87,23 +89,44 @@ function confirmedCast(guesses: GuessResult[], clues: RevealedClue[]): string[] 
   for (const guess of guesses) {
     for (const match of guess.cast.common) found.add(match.name);
   }
-  const clue = clues.find((entry) => entry.attribute === 'cast');
-  if (clue) for (const value of clue.values) found.add(value);
+  for (const clue of clues.filter((entry) => entry.attribute === 'cast')) {
+    for (const value of clue.values) found.add(value);
+  }
   return [...found];
 }
 
 function Pill({
   value,
   group,
+  revealable,
+  onReveal,
+  label,
 }: {
   value: string | null;
   group: Group;
+  /** When true this single cell can be bought with a lifeline. */
+  revealable?: boolean;
+  onReveal?: () => void;
+  label?: string;
 }) {
   const style = GROUP_STYLES[group];
 
   if (value === null) {
     // Unearned: a blurred bar that shows a slot exists without hinting
-    // at its contents.
+    // at its contents. While a lifeline is armed it becomes the target.
+    if (revealable && onReveal) {
+      return (
+        <button
+          type="button"
+          onClick={onReveal}
+          aria-label={`Reveal this ${label ?? 'cell'} with a lifeline`}
+          className={`h-9 rounded-full ${style.fill} opacity-40 blur-[2px]
+                      ring-2 ring-arm-400 transition-transform
+                      hover:scale-105 hover:opacity-60 focus:outline-none
+                      focus-visible:ring-arm-600`}
+        />
+      );
+    }
     return (
       <span
         aria-hidden
@@ -140,7 +163,7 @@ function Row({
   slots: number;
   columns: string;
   hint?: string;
-  /** When true this row can be clicked to spend a lifeline on it. */
+  /** When true the hidden cells in this row can each be bought. */
   revealable?: boolean;
   onReveal?: () => void;
 }) {
@@ -148,10 +171,20 @@ function Row({
   const total = Math.max(slots, values.length);
   const cells = Array.from({ length: total }, (_, index) => values[index] ?? null);
 
+  // Earned values are packed to the front, so a blurred cell's grid position
+  // is not its index on the mystery movie. The server resolves "the next
+  // unknown cell" itself, which is what every hidden pill here asks for.
   const grid = (
     <div className={`grid gap-2 ${columns}`}>
       {cells.map((value, index) => (
-        <Pill key={`${label}-${index}`} value={value} group={group} />
+        <Pill
+          key={`${label}-${index}`}
+          value={value}
+          group={group}
+          label={label}
+          revealable={revealable && value === null}
+          onReveal={onReveal}
+        />
       ))}
     </div>
   );
@@ -173,20 +206,7 @@ function Row({
           </span>
         )}
       </div>
-      {revealable && onReveal ? (
-        <button
-          type="button"
-          onClick={onReveal}
-          aria-label={`Reveal ${label} with a lifeline`}
-          className="w-full rounded-xl p-1 ring-2 ring-arm-400 ring-offset-2
-                     transition-transform hover:scale-[1.02] focus:outline-none
-                     focus-visible:ring-arm-600"
-        >
-          {grid}
-        </button>
-      ) : (
-        grid
-      )}
+      {grid}
     </div>
   );
 }
@@ -204,6 +224,9 @@ export function AttributePanel({
   const canReveal = (attribute: RevealableAttribute) =>
     revealMode && revealable.includes(attribute);
 
+  // No index is sent: earned values are packed to the front of the row, so
+  // a blurred pill's grid position is not its index on the mystery movie.
+  // The server resolves the first genuinely unknown cell instead.
   const revealProps = (attribute: RevealableAttribute) => ({
     revealable: canReveal(attribute),
     onReveal: onReveal ? () => onReveal(attribute) : undefined,

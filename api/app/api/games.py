@@ -233,9 +233,11 @@ def guess(game_id: str, payload: GuessRequest, db: Session = Depends(get_db)) ->
 def lifeline(
     game_id: str, payload: LifelineRequest, db: Session = Depends(get_db)
 ) -> dict:
-    """Spend a lifeline to reveal one attribute."""
+    """Spend a lifeline to reveal a single cell."""
     try:
-        revealed = game_service.use_lifeline(db, game_id, payload.attribute)
+        revealed = game_service.use_lifeline(
+            db, game_id, payload.attribute, payload.value_index
+        )
         game = game_service.get_session(db, game_id)
     except GameError as error:
         raise _handle(error) from error

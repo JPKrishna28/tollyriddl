@@ -78,6 +78,16 @@ export function useGame(gameDate?: string): UseGameResult {
     if (next.guesses) {
       setGuesses(next.guesses);
     }
+    // Lifelines now buy one cell at a time, so a reload has to rebuild each
+    // bought cell individually -- the server replays them with their values.
+    setClues(
+      next.lifelines_used.map((used) => ({
+        attribute: used.attribute,
+        values: used.values,
+        value_index: used.value_index,
+        lifeline_number: used.lifeline_number,
+      })),
+    );
   }, []);
 
   const load = useCallback(async () => {
@@ -152,11 +162,11 @@ export function useGame(gameDate?: string): UseGameResult {
   );
 
   const useLifelineAction = useCallback(
-    async (attribute: RevealableAttribute) => {
+    async (attribute: RevealableAttribute, valueIndex?: number) => {
       if (!game || game.status !== 'active') return;
       setError(null);
       try {
-        const response = await api.useLifeline(game.game_id, attribute);
+        const response = await api.useLifeline(game.game_id, attribute, valueIndex);
         setClues((previous) => [...previous, response.revealed]);
         setGame((previous) =>
           previous ? { ...previous, ...response.game } : previous,

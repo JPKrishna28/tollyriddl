@@ -105,9 +105,28 @@ CREATE TABLE IF NOT EXISTS lifelines (
     game_session_id VARCHAR(64) NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
     lifeline_number INTEGER NOT NULL,
     attribute       VARCHAR(64) NOT NULL,
+    -- Which cell of a multi-valued attribute this lifeline bought.
+    value_index     INTEGER NOT NULL DEFAULT 0,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_lifeline_session_number    UNIQUE (game_session_id, lifeline_number),
-    CONSTRAINT uq_lifeline_session_attribute UNIQUE (game_session_id, attribute)
+    CONSTRAINT uq_lifeline_session_number UNIQUE (game_session_id, lifeline_number),
+    -- Scoped to the cell, not the row: a second lifeline may target another
+    -- cell of the same attribute.
+    CONSTRAINT uq_lifeline_session_attribute_index
+        UNIQUE (game_session_id, attribute, value_index)
 );
 
 CREATE INDEX IF NOT EXISTS ix_lifelines_session ON lifelines (game_session_id);
+
+-- Migration for databases created before per-cell lifelines. CREATE TABLE
+-- IF NOT EXISTS above is a no-op on an existing table, so the column and
+-- the relaxed constraint have to be applied explicitly.
+ALTER TABLE lifelines ADD COLUMN IF NOT EXISTS value_index INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE lifelines DROP CONSTRAINT IF EXISTS uq_lifeline_session_attribute;
+
+DO $$
+BEGIN
+    ALTER TABLE lifelines ADD CONSTRAINT uq_lifeline_session_attribute_index
+        UNIQUE (game_session_id, attribute, value_index);
+EXCEPTION
+    WHEN duplicate_table THEN NULL;  -- constraint already present
+END $$;
