@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -29,3 +29,26 @@ def search(
         return []
     movies = movie_service.search_movies(db, q, limit=limit)
     return [movie.to_search_dict() for movie in movies]
+
+
+@router.get("/catalog")
+def catalog(response: Response, db: Session = Depends(get_db)) -> dict:
+    """The full guessable title list, fetched once and searched in the browser.
+
+    This exists to kill the per-keystroke round trip, not to widen what the
+    client knows: the payload carries exactly what `/search` already returns
+    (id, title, year) plus the normalized title used for ranking. Cast and
+    crew stay server-side, so the mystery movie is still only discoverable
+    by spending a guess.
+
+    Rows are arrays rather than objects -- with ~10k titles the repeated JSON
+    keys would roughly double the transfer for no benefit.
+    """
+    rows = movie_service.list_catalog(db)
+    # The catalogue only changes when the dataset is re-imported, so let the
+    # browser and any CDN keep it for a day and revalidate in the background.
+    response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
+    return {
+        "version": settings.catalog_version,
+        "movies": [[id_, title, normalized, year] for id_, title, normalized, year in rows],
+    }

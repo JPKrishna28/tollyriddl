@@ -107,8 +107,10 @@ export function HowToPlayModal({ onClose }: Props) {
               year range tightens with every attempt.
             </Step>
             <Step number={4} title="Use your lifelines">
-              After guess 4 and guess 6 you unlock a lifeline. Each one reveals a
-              cell of your choice outright — a director, the year, the cast.
+              After guess 4 and guess 6 you unlock a lifeline. Hit{' '}
+              <strong className="font-semibold text-slate-800">Reveal a cell</strong>,
+              then tap the highlighted row you want on the board — year, director,
+              cast, whichever helps most.
             </Step>
             <Step number={5} title="Run out? Take 3 more">
               If all 7 attempts are gone you can unlock 3 bonus guesses instead of

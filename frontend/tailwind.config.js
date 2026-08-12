@@ -12,6 +12,17 @@ export default {
           500: '#475569',
           700: '#334155',
         },
+        // Armed-lifeline highlight. Warm on purpose: the rest of the palette
+        // is slate/green/red, so an amber ring reads as "pick one of these"
+        // without colliding with a match or a miss.
+        arm: {
+          50: '#fdf6e7',
+          200: '#f5dfa6',
+          400: '#e0a72e',
+          500: '#c98f1c',
+          600: '#a87415',
+          700: '#7d5610',
+        },
         match: {
           50: '#f0f7f2',
           200: '#c9e2d2',

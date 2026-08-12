@@ -2,16 +2,20 @@
 //
 // Only attributes the server reports as *available* can be chosen, so a
 // clue the player already earned is never offered or wasted.
-
-import { useState } from 'react';
+//
+// Picking a clue happens on the board itself: arming a lifeline here makes
+// the still-hidden rows in AttributePanel clickable, so the player points at
+// the cell they want rather than matching a label to a row by name.
 
 import { ATTRIBUTE_LABELS } from '@/types/game';
-import type { GameState, RevealableAttribute, RevealedClue } from '@/types/game';
+import type { GameState, RevealedClue } from '@/types/game';
 
 interface Props {
   game: GameState;
   clues: RevealedClue[];
-  onUse: (attribute: RevealableAttribute) => void;
+  /** Arms/disarms cell picking on the board. */
+  armed: boolean;
+  onArm: (armed: boolean) => void;
   /** Blocks a second click while a spend is in flight. */
   busy?: boolean;
 }
@@ -24,9 +28,7 @@ function Sparkle() {
   );
 }
 
-export function LifelinePanel({ game, clues, onUse, busy }: Props) {
-  const [picking, setPicking] = useState<number | null>(null);
-
+export function LifelinePanel({ game, clues, armed, onArm, busy }: Props) {
   const used = game.lifelines_used.length;
   const unlocked = game.lifelines_unlocked;
   const available = game.lifelines_available;
@@ -56,59 +58,37 @@ export function LifelinePanel({ game, clues, onUse, busy }: Props) {
           );
         }
 
+        // Only the first usable lifeline drives arming, so two unlocked
+        // lifelines cannot both claim the same click on the board.
+        const isNextUsable = canUse && used === slot;
+        const isArmed = armed && isNextUsable;
+
         return (
           <div key={threshold} className="flex items-center gap-2">
             <Sparkle />
-            {picking === slot ? (
-              <div className="flex-1 rounded-lg border border-slate-200 bg-white p-2">
-                <p className="mb-1.5 text-xs text-slate-600">
-                  Choose a clue to reveal:
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {available.map((attribute) => (
-                    <button
-                      key={attribute}
-                      type="button"
-                      disabled={busy}
-                      className="btn-ghost px-2.5 py-1 text-xs"
-                      onClick={() => {
-                        onUse(attribute);
-                        setPicking(null);
-                      }}
-                    >
-                      {ATTRIBUTE_LABELS[attribute]}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="mt-1.5 text-xs text-slate-500 underline underline-offset-2
-                             hover:text-slate-900"
-                  onClick={() => setPicking(null)}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={!canUse || busy}
-                onClick={() => setPicking(slot)}
-                className={`flex-1 rounded-full px-4 py-2 text-sm transition-colors ${
-                  canUse && !busy
-                    ? 'bg-slate-900 text-white hover:bg-slate-700'
-                    : 'cursor-not-allowed bg-slate-100 text-slate-400'
-                }`}
-              >
-                {spent
-                  ? 'Lifeline used'
-                  : isUnlocked
-                    ? available.length > 0
-                      ? 'Reveal a cell'
-                      : 'No new clues available'
-                    : `Unlock Lifeline after ${threshold}th guess`}
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={!isNextUsable || busy}
+              aria-pressed={isArmed}
+              onClick={() => onArm(!isArmed)}
+              className={`flex-1 rounded-full px-4 py-2 text-sm transition-colors ${
+                isNextUsable && !busy
+                  ? isArmed
+                    ? 'bg-arm-500 text-white hover:bg-arm-600'
+                    : 'bg-slate-900 text-white hover:bg-slate-700'
+                  : 'cursor-not-allowed bg-slate-100 text-slate-400'
+              }`}
+            >
+              {spent
+                ? 'Lifeline used'
+                : isUnlocked
+                  ? available.length === 0
+                    ? 'No new clues available'
+                    : isArmed
+                      ? 'Tap a row to reveal — cancel'
+                      : 'Reveal a cell'
+                  : `Unlock Lifeline after ${threshold}th guess`}
+            </button>
             <Sparkle />
           </div>
         );

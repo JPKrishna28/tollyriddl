@@ -50,6 +50,8 @@ export function GameBoard({ gameDate, heading }: Props) {
   } = useGame(gameDate);
 
   const [showResult, setShowResult] = useState(false);
+  // True while a lifeline is armed and waiting for the player to pick a row.
+  const [arming, setArming] = useState(false);
 
   // Pop the result modal automatically when the game ends.
   useEffect(() => {
@@ -57,6 +59,15 @@ export function GameBoard({ gameDate, heading }: Props) {
       setShowResult(true);
     }
   }, [game?.status, game?.mystery_movie]);
+
+  // Never leave the board armed once there is nothing left to spend on --
+  // otherwise rows stay highlighted and clicking them would fail server-side.
+  useEffect(() => {
+    if (!game) return;
+    if (game.status !== 'active' || game.lifelines_available.length === 0) {
+      setArming(false);
+    }
+  }, [game?.status, game?.lifelines_available.length]);
 
   if (loading) {
     return (
@@ -99,7 +110,22 @@ export function GameBoard({ gameDate, heading }: Props) {
           board is tall, and stacking it first would push the search box
           below the fold on a phone. */}
       <div className="order-2 lg:order-1">
-        <AttributePanel guesses={guesses} clues={clues} />
+        {arming && (
+          <p className="mb-2 rounded-lg bg-arm-50 px-3 py-2 text-center text-sm
+                        font-medium text-arm-700" role="status">
+            Tap a highlighted row to reveal it.
+          </p>
+        )}
+        <AttributePanel
+          guesses={guesses}
+          clues={clues}
+          revealMode={arming}
+          revealable={game.lifelines_available}
+          onReveal={(attribute) => {
+            setArming(false);
+            void useLifeline(attribute);
+          }}
+        />
       </div>
 
       {/* Right: attempts, lifelines and the search box. */}
@@ -119,7 +145,8 @@ export function GameBoard({ gameDate, heading }: Props) {
           <LifelinePanel
             game={game}
             clues={clues}
-            onUse={(attr) => void useLifeline(attr)}
+            armed={arming}
+            onArm={setArming}
             busy={submitting}
           />
         </div>

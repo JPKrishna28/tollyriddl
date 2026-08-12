@@ -86,6 +86,20 @@ def search_movies(session: Session, query: str, limit: int | None = None) -> lis
     return list(session.execute(statement).scalars())
 
 
+def list_catalog(session: Session) -> list[tuple[int, str, str, int | None]]:
+    """Every guessable title, for the client-side autocomplete index.
+
+    Same columns `to_search_dict` exposes, plus the normalized title so the
+    browser can rank matches identically to `search_movies` without asking
+    the server. Still no cast or crew: the catalogue is a list of names to
+    guess, not a way to mine attributes.
+    """
+    statement = select(
+        Movie.id, Movie.title, Movie.normalized_title, Movie.year
+    ).order_by(Movie.id)
+    return [tuple(row) for row in session.execute(statement).all()]
+
+
 def get_movie(session: Session, movie_id: int) -> Movie | None:
     return session.get(Movie, movie_id)
 

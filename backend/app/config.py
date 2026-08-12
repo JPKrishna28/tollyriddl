@@ -49,6 +49,10 @@ class Settings:
         # schedule, so it stays fixed per deployment.
         self.daily_seed: str = os.environ.get("DAILY_SEED", "telugu-mystery")
 
+        # Bumped when the movie dataset is re-imported, so browsers holding a
+        # cached catalogue fetch the new one instead of searching a stale list.
+        self.catalog_version: str = os.environ.get("CATALOG_VERSION", "1")
+
         # Gameplay rules.
         self.base_attempts: int = int(os.environ.get("BASE_ATTEMPTS", "7"))
         self.bonus_attempts: int = int(os.environ.get("BONUS_ATTEMPTS", "3"))

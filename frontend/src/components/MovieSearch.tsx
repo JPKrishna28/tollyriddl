@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@/services/api';
+import { isCatalogReady, loadCatalog, searchCatalog } from '@/services/catalog';
 import type { MovieSearchItem } from '@/types/game';
 
 interface Props {
@@ -21,6 +22,23 @@ export function MovieSearch({ onSelect, disabled, guessedIds, placeholder }: Pro
 
   const containerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Set only if the catalogue could not be fetched; makes search fall back to
+  // the server so a caching or network failure does not disable the game.
+  const [catalogFailed, setCatalogFailed] = useState(false);
+  const [catalogReady, setCatalogReady] = useState(isCatalogReady);
+
+  // Warm the catalogue as soon as the box mounts, so it is usually in memory
+  // before the player finishes typing their first title.
+  useEffect(() => {
+    if (catalogReady) return;
+    let cancelled = false;
+    loadCatalog()
+      .then(() => !cancelled && setCatalogReady(true))
+      .catch(() => !cancelled && setCatalogFailed(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogReady]);
 
   useEffect(() => {
     const term = query.trim();
@@ -30,8 +48,18 @@ export function MovieSearch({ onSelect, disabled, guessedIds, placeholder }: Pro
       return;
     }
 
+    // Fast path: the catalogue is in memory, so results are synchronous and
+    // there is nothing to debounce.
+    if (catalogReady && !catalogFailed) {
+      setResults(searchCatalog(term));
+      setHighlighted(0);
+      setOpen(true);
+      setLoading(false);
+      return;
+    }
+
+    // Fallback path: still loading the catalogue, or it failed outright.
     setLoading(true);
-    // Debounce so typing does not fire a request per keystroke.
     const timer = window.setTimeout(async () => {
       abortRef.current?.abort();
       const controller = new AbortController();
@@ -49,7 +77,7 @@ export function MovieSearch({ onSelect, disabled, guessedIds, placeholder }: Pro
     }, 220);
 
     return () => window.clearTimeout(timer);
-  }, [query]);
+  }, [query, catalogReady, catalogFailed]);
 
   useEffect(() => {
     function onClickOutside(event: MouseEvent) {

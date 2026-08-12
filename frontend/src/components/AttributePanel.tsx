@@ -7,7 +7,12 @@
 
 import { useMemo } from 'react';
 
-import type { GuessResult, RevealedClue, SetResult } from '@/types/game';
+import type {
+  GuessResult,
+  RevealableAttribute,
+  RevealedClue,
+  SetResult,
+} from '@/types/game';
 
 interface Props {
   /** Chronological guess history. */
@@ -17,6 +22,13 @@ interface Props {
   /** Bounds shown before the year is pinned down. */
   yearFloor?: number;
   yearCeiling?: number;
+  /**
+   * Lifeline targeting. When armed, still-hidden rows become buttons and
+   * clicking one spends the lifeline on that attribute.
+   */
+  revealMode?: boolean;
+  revealable?: RevealableAttribute[];
+  onReveal?: (attribute: RevealableAttribute) => void;
 }
 
 type Group = 'year' | 'cast' | 'crew';
@@ -119,6 +131,8 @@ function Row({
   slots,
   columns,
   hint,
+  revealable,
+  onReveal,
 }: {
   label: string;
   values: string[];
@@ -126,10 +140,21 @@ function Row({
   slots: number;
   columns: string;
   hint?: string;
+  /** When true this row can be clicked to spend a lifeline on it. */
+  revealable?: boolean;
+  onReveal?: () => void;
 }) {
   // Never shrink below what the player has actually earned.
   const total = Math.max(slots, values.length);
   const cells = Array.from({ length: total }, (_, index) => values[index] ?? null);
+
+  const grid = (
+    <div className={`grid gap-2 ${columns}`}>
+      {cells.map((value, index) => (
+        <Pill key={`${label}-${index}`} value={value} group={group} />
+      ))}
+    </div>
+  );
 
   return (
     <div>
@@ -148,11 +173,20 @@ function Row({
           </span>
         )}
       </div>
-      <div className={`grid gap-2 ${columns}`}>
-        {cells.map((value, index) => (
-          <Pill key={`${label}-${index}`} value={value} group={group} />
-        ))}
-      </div>
+      {revealable && onReveal ? (
+        <button
+          type="button"
+          onClick={onReveal}
+          aria-label={`Reveal ${label} with a lifeline`}
+          className="w-full rounded-xl p-1 ring-2 ring-arm-400 ring-offset-2
+                     transition-transform hover:scale-[1.02] focus:outline-none
+                     focus-visible:ring-arm-600"
+        >
+          {grid}
+        </button>
+      ) : (
+        grid
+      )}
     </div>
   );
 }
@@ -162,7 +196,19 @@ export function AttributePanel({
   clues,
   yearFloor = 2000,
   yearCeiling = 2023,
+  revealMode = false,
+  revealable = [],
+  onReveal,
 }: Props) {
+  /** A row is clickable only while a lifeline is armed and still unspent here. */
+  const canReveal = (attribute: RevealableAttribute) =>
+    revealMode && revealable.includes(attribute);
+
+  const revealProps = (attribute: RevealableAttribute) => ({
+    revealable: canReveal(attribute),
+    onReveal: onReveal ? () => onReveal(attribute) : undefined,
+  });
+
   const known = useMemo(() => {
     // Narrow the year window using each guess's earlier/later direction.
     // A wrong guess still teaches the player which side the answer is on.
@@ -205,7 +251,27 @@ export function AttributePanel({
         <h3 className="mb-2 text-center font-display text-sm font-semibold tracking-wide text-slate-700">
           Year of Release
         </h3>
-        <div className="flex items-center justify-center gap-3">
+        <div
+          className={`flex items-center justify-center gap-3 ${
+            canReveal('year')
+              ? 'cursor-pointer rounded-xl p-1 ring-2 ring-arm-400 ring-offset-2'
+              : ''
+          }`}
+          {...(canReveal('year') && onReveal
+            ? {
+                role: 'button',
+                tabIndex: 0,
+                'aria-label': 'Reveal Year with a lifeline',
+                onClick: () => onReveal('year'),
+                onKeyDown: (event: React.KeyboardEvent) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onReveal('year');
+                  }
+                },
+              }
+            : {})}
+        >
           {known.yearExact !== null ? (
             <span
               className="flex h-9 min-w-[7rem] items-center justify-center rounded-full
@@ -242,6 +308,7 @@ export function AttributePanel({
             slots={PLACEHOLDER_COUNT.genre}
             columns="grid-cols-3"
             hint="Genres shared with a movie you guessed."
+            {...revealProps('genre')}
           />
         </div>
       </section>
@@ -255,6 +322,7 @@ export function AttributePanel({
           slots={PLACEHOLDER_COUNT.cast}
           columns="grid-cols-3"
           hint="Actors shared with a movie you guessed."
+          {...revealProps('cast')}
         />
       </section>
 
@@ -266,6 +334,7 @@ export function AttributePanel({
           group="crew"
           slots={PLACEHOLDER_COUNT.director}
           columns="grid-cols-1"
+          {...revealProps('director')}
         />
         <Row
           label="Production House"
@@ -273,6 +342,7 @@ export function AttributePanel({
           group="crew"
           slots={PLACEHOLDER_COUNT.production_house}
           columns="grid-cols-2"
+          {...revealProps('production_house')}
         />
         <Row
           label="Music Director"
@@ -280,6 +350,7 @@ export function AttributePanel({
           group="crew"
           slots={PLACEHOLDER_COUNT.music_director}
           columns="grid-cols-1"
+          {...revealProps('music_director')}
         />
         <Row
           label="Writer"
@@ -287,6 +358,7 @@ export function AttributePanel({
           group="crew"
           slots={PLACEHOLDER_COUNT.writer}
           columns="grid-cols-1"
+          {...revealProps('writer')}
         />
       </section>
     </div>
